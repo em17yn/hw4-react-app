@@ -1,51 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, Button, TextField } from '@mui/material';
 
-function ProjectCard({ project, setProjectJoined, hardwareQty, setHardwareQty }) {
+function ProjectCard({ project }) {
   const [message, setMessage] = useState('');
   const [qtyInput, setQtyInput] = useState(1);
+  const [projectQty, setProjectQty] = useState(0);
+  const [availableQty, setAvailableQty] = useState(10);
 
   const showMessage = (msg) => {
     setMessage(msg);
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const fetchStatus = async () => {
+    const res = await fetch(`/status?projectId=${project.id}`);
+    const data = await res.json();
+    setProjectQty(data.projectQty);
+    setAvailableQty(data.available);
+  };
+
+  useEffect(() => {
+    fetchStatus();
+  }, []);
+
   const handleJoin = async () => {
-    try {
-      const endpoint = project.joined ? 'leave' : 'join';
-      const res = await fetch(`/${endpoint}?projectId=${project.id}`);
+    const endpoint = project.joined ? 'leave' : 'join';
+    const res = await fetch(`/${endpoint}?projectId=${project.id}`);
+    const data = await res.json();
+    showMessage(data.message);
+    project.joined = !project.joined; // Temporary toggle
+  };
+
+  const handleCheckOut = async () => {
+    const res = await fetch(`/checkout?projectId=${project.id}&qty=${qtyInput}`);
+    if (res.ok) {
       const data = await res.json();
       showMessage(data.message);
-      setProjectJoined(project.id, !project.joined);
-    } catch (err) {
-      showMessage('Error connecting to server');
+      setProjectQty(data.projectQty);
+      setAvailableQty(data.available);
+    } else {
+      const data = await res.json();
+      showMessage(data.message);
     }
   };
 
   const handleCheckIn = async () => {
-    try {
-      const res = await fetch(`/checkin?projectId=${project.id}&qty=${qtyInput}`);
+    const res = await fetch(`/checkin?projectId=${project.id}&qty=${qtyInput}`);
+    if (res.ok) {
       const data = await res.json();
       showMessage(data.message);
-      setHardwareQty(hardwareQty + Number(qtyInput));
-    } catch (err) {
-      showMessage('Check-in failed');
-    }
-  };
-
-  const handleCheckOut = async () => {
-    if (qtyInput > hardwareQty) {
-      showMessage(`Not enough hardware. Only ${hardwareQty} available.`);
-      return;
-    }
-
-    try {
-      const res = await fetch(`/checkout?projectId=${project.id}&qty=${qtyInput}`);
+      setProjectQty(data.projectQty);
+      setAvailableQty(data.available);
+    } else {
       const data = await res.json();
       showMessage(data.message);
-      setHardwareQty(hardwareQty - Number(qtyInput));
-    } catch (err) {
-      showMessage('Check-out failed');
     }
   };
 
@@ -58,16 +66,26 @@ function ProjectCard({ project, setProjectJoined, hardwareQty, setHardwareQty })
   };
 
   return (
-    <Card sx={{ margin: '1rem 0', border: '2px solid #ffc1cc', borderRadius: '12px' }}>
+    <Card
+      sx={{
+        margin: '1rem 0',
+        border: '2px solid #ffc1cc',
+        borderRadius: '12px'
+      }}
+    >
       <CardContent>
         <h2 style={{ color: '#f47c7c', marginBottom: '0.5rem' }}>{project.name}</h2>
-        <p style={{ marginBottom: '1rem' }}>
+        <p style={{ marginBottom: '0.5rem' }}>
           {project.joined
             ? 'You have joined this project.'
             : 'You are not joined yet.'}
         </p>
-        <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-          Shared hardware available: <strong>{hardwareQty}</strong>
+
+        <p style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+          Available hardware: <strong>{availableQty}</strong>
+        </p>
+        <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+          You have checked out: <strong>{projectQty}</strong>
         </p>
 
         <TextField
@@ -94,6 +112,7 @@ function ProjectCard({ project, setProjectJoined, hardwareQty, setHardwareQty })
           >
             {project.joined ? 'Leave Project' : 'Join Project'}
           </Button>
+
           <Button variant="contained" onClick={handleCheckOut} sx={buttonStyle}>
             Check Out
           </Button>
